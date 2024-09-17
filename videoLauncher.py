@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import subprocess
+import shlex
 import tkinter as tk
 from tkinter import (
     colorchooser,
@@ -373,16 +374,19 @@ class VideoLauncherApp:
 
         if video_path and os.path.exists(video_path):
             try:
-                subprocess.Popen([
+                # Construct the VLC command
+                vlc_command = [
                     self.vlc_path,
                     "--fullscreen",
-                    "--no-embedded-video",
                     "--no-video-title-show",
                     "--loop",
-                    "--no-interact",
                     "--quiet",
+                    "--no-repeat",
+                    "--no-audio",
                     video_path
-                ])
+                ]
+                # Launch VLC with the command
+                subprocess.Popen(vlc_command)
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to launch VLC: {e}")
         else:
