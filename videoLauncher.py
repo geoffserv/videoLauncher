@@ -12,6 +12,7 @@ from tkinter import (
     font as tkfont,
 )
 from tkinterdnd2 import DND_FILES, TkinterDnD
+from screeninfo import get_monitors  # Import screeninfo
 
 # Path to the settings file
 SETTINGS_FILE = "settings.json"
@@ -28,6 +29,7 @@ class VideoLauncherApp:
         self.root = root
         self.settings = self.load_settings()
         self.fullscreen = self.settings.get("fullscreen", False)
+        self.overrideredirect = False  # Track overrideredirect state
         self.buttons = []
         self.font = tkfont.Font(
             family=self.settings.get("font_family", "Arial"),
@@ -433,12 +435,51 @@ class VideoLauncherApp:
 
     def toggle_fullscreen(self):
         """
-        Toggle between fullscreen and windowed mode.
+        Toggle between fullscreen and windowed mode on the current monitor.
         """
         self.fullscreen = not self.fullscreen
-        self.root.attributes("-fullscreen", self.fullscreen)
         self.settings["fullscreen"] = self.fullscreen
         self.save_settings()
+
+        if self.fullscreen:
+            # Get the current window position
+            window_x = self.root.winfo_x()
+            window_y = self.root.winfo_y()
+
+            # Find the monitor where the window is currently located
+            for monitor in get_monitors():
+                if (
+                    window_x >= monitor.x
+                    and window_x < monitor.x + monitor.width
+                    and window_y >= monitor.y
+                    and window_y < monitor.y + monitor.height
+                ):
+                    # Remove window borders
+                    self.root.overrideredirect(True)
+                    self.overrideredirect = True
+
+                    # Save the current geometry to restore later
+                    self.windowed_geometry = self.root.geometry()
+
+                    # Set the window geometry to cover the entire monitor
+                    self.root.geometry(
+                        f"{monitor.width}x{monitor.height}+{monitor.x}+{monitor.y}"
+                    )
+                    break
+            else:
+                # If monitor not found, default to normal fullscreen
+                self.root.attributes("-fullscreen", True)
+        else:
+            # Restore window borders
+            if self.overrideredirect:
+                self.root.overrideredirect(False)
+                self.overrideredirect = False
+
+                # Restore the windowed geometry
+                if hasattr(self, 'windowed_geometry'):
+                    self.root.geometry(self.windowed_geometry)
+            else:
+                self.root.attributes("-fullscreen", False)
 
     def quit_program(self):
         """
