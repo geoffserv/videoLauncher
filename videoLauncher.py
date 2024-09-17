@@ -2,7 +2,6 @@ import os
 import sys
 import json
 import subprocess
-import shlex
 import tkinter as tk
 from tkinter import (
     colorchooser,
@@ -249,6 +248,8 @@ class VideoLauncherApp:
             initialdir=r"C:\Program Files\VideoLAN\VLC",
         )
         if vlc_path and os.path.exists(vlc_path):
+            # Normalize the path to use backslashes
+            vlc_path = os.path.normpath(vlc_path)
             self.vlc_path = vlc_path
             self.settings["vlc_path"] = vlc_path
             self.save_settings()
@@ -278,6 +279,8 @@ class VideoLauncherApp:
                 ],
             )
             if video_path:
+                # Normalize the path to use backslashes
+                video_path = os.path.normpath(video_path)
                 self.settings["buttons"][button_index]["video"] = video_path
 
         self.save_settings()
@@ -374,19 +377,22 @@ class VideoLauncherApp:
 
         if video_path and os.path.exists(video_path):
             try:
+                # Normalize paths
+                vlc_path = os.path.normpath(self.vlc_path)
+                video_path = os.path.normpath(video_path)
+
+                # Quote paths to handle spaces
+                vlc_path_quoted = f'"{vlc_path}"'
+                video_path_quoted = f'"{video_path}"'
+
                 # Construct the VLC command
-                vlc_command = [
-                    self.vlc_path,
-                    "--fullscreen",
-                    "--no-video-title-show",
-                    "--loop",
-                    "--quiet",
-                    "--no-repeat",
-                    "--no-audio",
-                    video_path
-                ]
+                vlc_command = f'{vlc_path_quoted} --fullscreen --no-video-title-show --loop --quiet {video_path_quoted}'
+
+                # Print the command for debugging
+                print("Executing VLC command:", vlc_command)
+
                 # Launch VLC with the command
-                subprocess.Popen(vlc_command)
+                subprocess.Popen(vlc_command, shell=True)
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to launch VLC: {e}")
         else:
@@ -399,7 +405,7 @@ class VideoLauncherApp:
         Close VLC media player.
         """
         try:
-            subprocess.Popen(["taskkill", "/F", "/IM", "vlc.exe"])
+            subprocess.Popen('taskkill /F /IM vlc.exe', shell=True)
         except Exception as e:
             messagebox.showerror("Error", f"Failed to close VLC: {e}")
 
@@ -410,6 +416,8 @@ class VideoLauncherApp:
         try:
             video_path = event.data.strip("{}")  # Remove braces if present
             if os.path.isfile(video_path):
+                # Normalize the path
+                video_path = os.path.normpath(video_path)
                 self.settings["buttons"][button_index]["video"] = video_path
                 self.save_settings()
                 messagebox.showinfo(
