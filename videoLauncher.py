@@ -56,6 +56,7 @@ class VideoLauncherApp:
                 "fullscreen": False,
                 "window_geometry": "600x600+100+100",
                 "vlc_path": "",
+                "fullscreen_monitor": None,
                 "buttons": [{"title": f"Button {i+1}", "video": ""} for i in range(9)],
             }
 
@@ -91,9 +92,6 @@ class VideoLauncherApp:
         self.root.title("Video Launcher")
         self.apply_window_geometry()
 
-        # Fullscreen mode
-        self.root.attributes("-fullscreen", self.fullscreen)
-
         # Set background color
         self.root.configure(bg=self.settings.get("background_color", "#000000"))
 
@@ -109,6 +107,10 @@ class VideoLauncherApp:
         # Bind right-click to show context menu
         self.root.bind("<Button-3>", self.show_context_menu)
 
+        # Handle fullscreen on startup
+        if self.fullscreen:
+            self.enter_fullscreen_on_startup()
+
     def apply_window_geometry(self):
         """
         Apply saved window geometry.
@@ -121,7 +123,7 @@ class VideoLauncherApp:
         Save window geometry on resize or move.
         """
         # Avoid saving geometry when in fullscreen
-        if not self.fullscreen:
+        if not self.fullscreen and not self.overrideredirect:
             self.settings["window_geometry"] = self.root.geometry()
             self.save_settings()
 
@@ -433,16 +435,46 @@ class VideoLauncherApp:
                 "Error", "Invalid file or path. Please drop a valid video file."
             )
 
+    def enter_fullscreen_on_startup(self):
+        """
+        Enter fullscreen mode on startup, using the saved monitor information.
+        """
+        monitor_info = self.settings.get("fullscreen_monitor")
+        if monitor_info:
+            # Check if the monitor is available
+            for monitor in get_monitors():
+                if (
+                    monitor.x == monitor_info['x']
+                    and monitor.y == monitor_info['y']
+                    and monitor.width == monitor_info['width']
+                    and monitor.height == monitor_info['height']
+                ):
+                    # Remove window borders
+                    self.root.overrideredirect(True)
+                    self.overrideredirect = True
+
+                    # Set the window geometry to cover the monitor
+                    self.root.geometry(
+                        f"{monitor.width}x{monitor.height}+{monitor.x}+{monitor.y}"
+                    )
+                    break
+            else:
+                # Monitor not found, default to primary monitor
+                self.root.attributes("-fullscreen", True)
+        else:
+            # No saved monitor info, default to primary monitor
+            self.root.attributes("-fullscreen", True)
+
     def toggle_fullscreen(self):
         """
         Toggle between fullscreen and windowed mode on the current monitor.
         """
         self.fullscreen = not self.fullscreen
         self.settings["fullscreen"] = self.fullscreen
-        self.save_settings()
 
         if self.fullscreen:
             # Get the current window position
+            self.root.update_idletasks()
             window_x = self.root.winfo_x()
             window_y = self.root.winfo_y()
 
@@ -465,10 +497,20 @@ class VideoLauncherApp:
                     self.root.geometry(
                         f"{monitor.width}x{monitor.height}+{monitor.x}+{monitor.y}"
                     )
+
+                    # Save monitor info to settings
+                    self.settings["fullscreen_monitor"] = {
+                        "x": monitor.x,
+                        "y": monitor.y,
+                        "width": monitor.width,
+                        "height": monitor.height
+                    }
                     break
             else:
                 # If monitor not found, default to normal fullscreen
                 self.root.attributes("-fullscreen", True)
+                self.overrideredirect = False
+                self.settings["fullscreen_monitor"] = None
         else:
             # Restore window borders
             if self.overrideredirect:
@@ -480,6 +522,9 @@ class VideoLauncherApp:
                     self.root.geometry(self.windowed_geometry)
             else:
                 self.root.attributes("-fullscreen", False)
+            self.settings["fullscreen_monitor"] = None
+
+        self.save_settings()
 
     def quit_program(self):
         """
