@@ -14,23 +14,17 @@ from tkinter import (
 from tkinterdnd2 import DND_FILES, TkinterDnD
 from screeninfo import get_monitors  # Import screeninfo
 
-# Button assignments, themes, window location etc will be saved to this json file.
+# Path to the settings file
 SETTINGS_FILE = "settings.json"
 
 class VideoLauncherApp:
     """
     Main application class for the Video Launcher.
-    This was originally built to launch vlc, which seemed to work fine at first.
-    But, after some testing, it's difficult/impossible to make vlc launch from the
-    command line WITHOUT queueing a video to a new playlist.
-    As a result, when you press multiple buttons you end up creating an ad-hoc playlist.
-    I'm pivoting to mpv, a lightweight player I've used to automate video playback
-    in our office lobby.
     """
 
     def __init__(self, root):
         """
-        Constructor, initialize the app.
+        Initialize the application.
         """
         self.root = root
         self.settings = self.load_settings()
@@ -42,6 +36,7 @@ class VideoLauncherApp:
             size=self.settings.get("font_size", 12)
         )
         self.mpv_path = self.settings.get("mpv_path", "")
+        self.mpv_process = None  # Track the mpv process
         self.init_ui()
 
     def load_settings(self):
@@ -52,7 +47,7 @@ class VideoLauncherApp:
             with open(SETTINGS_FILE, "r") as f:
                 return json.load(f)
         else:
-            # Default settings:
+            # Default settings
             return {
                 "background_color": "#000000",
                 "button_border_color": "#FFFFFF",
@@ -255,7 +250,7 @@ class VideoLauncherApp:
                 ("mpv Executable", "mpv.exe"),
                 ("All Files", "*.*"),
             ],
-            initialdir=r"C:\Program Files\mpv",
+            initialdir=r"C:\Program Files\VideoLAN\mpv",
         )
         if mpv_path and os.path.exists(mpv_path):
             # Normalize the path to use backslashes
@@ -378,6 +373,9 @@ class VideoLauncherApp:
         """
         Play the selected video using mpv.
         """
+        # Close any existing mpv instance started by this application
+        self.close_mpv()
+
         if not self.mpv_path or not os.path.exists(self.mpv_path):
             messagebox.showerror(
                 "mpv Not Found",
@@ -391,18 +389,19 @@ class VideoLauncherApp:
                 mpv_path = os.path.normpath(self.mpv_path)
                 video_path = os.path.normpath(video_path)
 
-                # Quote paths to handle spaces
-                mpv_path_quoted = f'"{mpv_path}"'
-                video_path_quoted = f'"{video_path}"'
-
-                # Construct the mpv command
-                mpv_command = f'{mpv_path_quoted} --fullscreen --loop-file=inf {video_path_quoted}'
+                # Construct the mpv command as a list
+                mpv_command = [
+                    mpv_path,
+                    "--fullscreen",
+                    "--loop-file=inf",
+                    video_path
+                ]
 
                 # Print the command for debugging
                 print("Executing mpv command:", mpv_command)
 
                 # Launch mpv with the command
-                subprocess.Popen(mpv_command, shell=True)
+                self.mpv_process = subprocess.Popen(mpv_command)
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to launch mpv: {e}")
         else:
@@ -412,10 +411,14 @@ class VideoLauncherApp:
 
     def close_mpv(self):
         """
-        Close mpv media player.
+        Close the mpv process started by this application.
         """
         try:
-            subprocess.Popen('taskkill /F /IM mpv.exe', shell=True)
+            if self.mpv_process and self.mpv_process.poll() is None:
+                # Terminate the mpv process
+                self.mpv_process.kill()
+                self.mpv_process.wait()
+                self.mpv_process = None
         except Exception as e:
             messagebox.showerror("Error", f"Failed to close mpv: {e}")
 
@@ -536,6 +539,8 @@ class VideoLauncherApp:
         """
         Quit the application.
         """
+        # Close mpv when quitting the application
+        self.close_mpv()
         self.root.quit()
 
     def show_help(self):
