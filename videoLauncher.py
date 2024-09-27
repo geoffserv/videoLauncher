@@ -14,17 +14,23 @@ from tkinter import (
 from tkinterdnd2 import DND_FILES, TkinterDnD
 from screeninfo import get_monitors  # Import screeninfo
 
-# Path to the settings file
+# Button assignments, themes, window location etc will be saved to this json file.
 SETTINGS_FILE = "settings.json"
 
 class VideoLauncherApp:
     """
     Main application class for the Video Launcher.
+    This was originally built to launch vlc, which seemed to work fine at first.
+    But, after some testing, it's difficult/impossible to make vlc launch from the
+    command line WITHOUT queueing a video to a new playlist.
+    As a result, when you press multiple buttons you end up creating an ad-hoc playlist.
+    I'm pivoting to mpv, a lightweight player I've used to automate video playback
+    in our office lobby.
     """
 
     def __init__(self, root):
         """
-        Initialize the application.
+        Constructor, initialize the app.
         """
         self.root = root
         self.settings = self.load_settings()
@@ -35,7 +41,7 @@ class VideoLauncherApp:
             family=self.settings.get("font_family", "Arial"),
             size=self.settings.get("font_size", 12)
         )
-        self.vlc_path = self.settings.get("vlc_path", "")
+        self.mpv_path = self.settings.get("mpv_path", "")
         self.init_ui()
 
     def load_settings(self):
@@ -46,7 +52,7 @@ class VideoLauncherApp:
             with open(SETTINGS_FILE, "r") as f:
                 return json.load(f)
         else:
-            # Default settings
+            # Default settings:
             return {
                 "background_color": "#000000",
                 "button_border_color": "#FFFFFF",
@@ -55,7 +61,7 @@ class VideoLauncherApp:
                 "font_size": 12,
                 "fullscreen": False,
                 "window_geometry": "600x600+100+100",
-                "vlc_path": "",
+                "mpv_path": "",
                 "fullscreen_monitor": None,
                 "buttons": [{"title": f"Button {i+1}", "video": ""} for i in range(9)],
             }
@@ -139,7 +145,7 @@ class VideoLauncherApp:
         for i in range(9):
             button_info = self.settings["buttons"][i]
             title = button_info.get("title", f"Button {i+1}")
-            command = self.close_vlc if i == 8 else lambda i=i: self.play_video(
+            command = self.close_mpv if i == 8 else lambda i=i: self.play_video(
                 self.settings["buttons"][i]["video"]
             )
             btn = tk.Button(
@@ -200,11 +206,11 @@ class VideoLauncherApp:
         settings_window.geometry("400x600")
         settings_window.resizable(False, False)
 
-        # Change VLC Path
+        # Change mpv Path
         tk.Button(
             settings_window,
-            text="Set VLC Executable Path",
-            command=self.set_vlc_path,
+            text="Set mpv Executable Path",
+            command=self.set_mpv_path,
         ).pack(pady=10, fill="x", padx=20)
 
         # Change Background Color
@@ -239,27 +245,27 @@ class VideoLauncherApp:
                 command=lambda i=i: self.update_button_settings(i),
             ).pack(pady=5, fill="x", padx=20)
 
-    def set_vlc_path(self):
+    def set_mpv_path(self):
         """
-        Set the path to the VLC executable.
+        Set the path to the mpv executable.
         """
-        vlc_path = filedialog.askopenfilename(
-            title="Select VLC Executable",
+        mpv_path = filedialog.askopenfilename(
+            title="Select mpv Executable",
             filetypes=[
-                ("VLC Executable", "vlc.exe"),
+                ("mpv Executable", "mpv.exe"),
                 ("All Files", "*.*"),
             ],
-            initialdir=r"C:\Program Files\VideoLAN\VLC",
+            initialdir=r"C:\Program Files\mpv",
         )
-        if vlc_path and os.path.exists(vlc_path):
+        if mpv_path and os.path.exists(mpv_path):
             # Normalize the path to use backslashes
-            vlc_path = os.path.normpath(vlc_path)
-            self.vlc_path = vlc_path
-            self.settings["vlc_path"] = vlc_path
+            mpv_path = os.path.normpath(mpv_path)
+            self.mpv_path = mpv_path
+            self.settings["mpv_path"] = mpv_path
             self.save_settings()
-            messagebox.showinfo("VLC Path Set", f"VLC path set to: {vlc_path}")
+            messagebox.showinfo("mpv Path Set", f"mpv path set to: {mpv_path}")
         else:
-            messagebox.showerror("Error", "Invalid VLC path selected.")
+            messagebox.showerror("Error", "Invalid mpv path selected.")
 
     def update_button_settings(self, button_index):
         """
@@ -370,48 +376,48 @@ class VideoLauncherApp:
 
     def play_video(self, video_path):
         """
-        Play the selected video using VLC.
+        Play the selected video using mpv.
         """
-        if not self.vlc_path or not os.path.exists(self.vlc_path):
+        if not self.mpv_path or not os.path.exists(self.mpv_path):
             messagebox.showerror(
-                "VLC Not Found",
-                "VLC executable not found. Please set the VLC path in Settings.",
+                "mpv Not Found",
+                "mpv executable not found. Please set the mpv path in Settings.",
             )
             return
 
         if video_path and os.path.exists(video_path):
             try:
                 # Normalize paths
-                vlc_path = os.path.normpath(self.vlc_path)
+                mpv_path = os.path.normpath(self.mpv_path)
                 video_path = os.path.normpath(video_path)
 
                 # Quote paths to handle spaces
-                vlc_path_quoted = f'"{vlc_path}"'
+                mpv_path_quoted = f'"{mpv_path}"'
                 video_path_quoted = f'"{video_path}"'
 
-                # Construct the VLC command
-                vlc_command = f'{vlc_path_quoted} --fullscreen --no-video-title-show --loop --quiet {video_path_quoted}'
+                # Construct the mpv command
+                mpv_command = f'{mpv_path_quoted} --fullscreen --loop-file=inf {video_path_quoted}'
 
                 # Print the command for debugging
-                print("Executing VLC command:", vlc_command)
+                print("Executing mpv command:", mpv_command)
 
-                # Launch VLC with the command
-                subprocess.Popen(vlc_command, shell=True)
+                # Launch mpv with the command
+                subprocess.Popen(mpv_command, shell=True)
             except Exception as e:
-                messagebox.showerror("Error", f"Failed to launch VLC: {e}")
+                messagebox.showerror("Error", f"Failed to launch mpv: {e}")
         else:
             messagebox.showwarning(
                 "Video Not Found", "No video file assigned or file does not exist."
             )
 
-    def close_vlc(self):
+    def close_mpv(self):
         """
-        Close VLC media player.
+        Close mpv media player.
         """
         try:
-            subprocess.Popen('taskkill /F /IM vlc.exe', shell=True)
+            subprocess.Popen('taskkill /F /IM mpv.exe', shell=True)
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to close VLC: {e}")
+            messagebox.showerror("Error", f"Failed to close mpv: {e}")
 
     def drag_and_drop(self, event, button_index):
         """
@@ -546,8 +552,8 @@ class VideoLauncherApp:
             "Features:\n"
             "1. **Main Screen**: Displays 9 buttons in a 3x3 grid.\n"
             "2. **Button Actions**:\n"
-            "   - Click a button to play the assigned video on loop using VLC.\n"
-            "   - The 9th button ('VR Experience') closes VLC.\n"
+            "   - Click a button to play the assigned video on loop using mpv.\n"
+            "   - The 9th button ('VR Experience') closes mpv.\n"
             "3. **Customization**:\n"
             "   - Right-click to access the context menu.\n"
             "   - Settings: Customize background color, button colors, titles, and video files.\n"
